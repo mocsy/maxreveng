@@ -20,9 +20,10 @@
 
     /* Output */
     "outDir": "./dist",
+    "rootDir": ".",
     "removeComments": true,
     "sourceMap": true
   },
-  "include": ["src/**/*", "scripts/**/*"],
-  "exclude": ["node_modules"]
+  "include": ["scripts/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

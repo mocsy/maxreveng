@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { unlink } from 'node:fs/promises';
-import { extname, resolve } from 'node:path';
+import { extname, resolve, basename } from 'node:path';
 import sharp from 'sharp';
 import { execa } from 'execa';
 
@@ -12,7 +12,8 @@ const CONFIG = {
   MAX_HEIGHT: 2160,
   AVIF_QUALITY: 65,
   AVIF_EFFORT: 4,
-  ALLOWED_EXTENSIONS: /\.(png|jpg|jpeg)$/i,
+  ALLOWED_EXTENSIONS: /\.(png|jpg|jpeg|webp)$/i,
+  DOC_EXTENSIONS: /\.(md|mdx|html|jsx|tsx)$/i,
 } as const;
 
 /**
@@ -23,7 +24,57 @@ const COLORS = {
   cyan: '\x1b[36m',
   green: '\x1b[32m',
   red: '\x1b[31m',
+  yellow: '\x1b[33m',
 } as const;
+
+/**
+ * Helper to attempt unlinking a file with retries (to handle Windows EBUSY errors)
+ */
+async function safeUnlink(filePath: string, retries = 3, delayMs = 500) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await unlink(filePath);
+      return;
+    } catch (error: any) {
+      if (i === retries - 1) throw error;
+      if (error.code === 'EBUSY') {
+        await new Promise((res) => setTimeout(res, delayMs));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+/**
+ * Updates file references in documentation files to point to the new .avif versions
+ */
+async function updateReferences(oldFileName: string, newFileName: string): Promise<void> {
+  // Get all files from git
+  const { stdout } = await execa('git', ['ls-files']);
+  const allFiles = stdout.split('\n').filter((f) => f.length > 0 && CONFIG.DOC_EXTENSIONS.test(f));
+
+  for (const docFile of allFiles) {
+    const filePath = resolve(docFile);
+    if (!existsSync(filePath)) continue;
+
+    const content = await import('node:fs').then((fs) => fs.readFileSync(filePath, 'utf-8'));
+    
+    // Regex: Matches the filename as a whole word/path component (prevents partial matches)
+    const escapedOldName = oldFileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(?<=^|[^\\w])` + escapedOldName + `(?=[\\s\"'()<>\]]|$)`, 'g');
+
+    if (regex.test(content)) {
+      const newContent = content.replace(regex, newFileName);
+      if (newContent !== content) {
+        // Note: Using sync for simplicity in this loop, but could be async
+        import('node:fs').then((fs) => fs.writeFileSync(filePath, newContent, 'utf-8'));
+        console.log(`  ${COLORS.yellow}[REFS] Updated link in: ${docFile}${COLORS.reset}`);
+        await execa('git', ['add', docFile]);
+      }
+    }
+  }
+}
 
 async function runImageOptimization(): Promise<void> {
   try {
@@ -54,6 +105,8 @@ async function runImageOptimization(): Promise<void> {
       }
 
       const ext = extname(filePath);
+      const baseName = basename(filePath);
+      const outputFileName = baseName.replace(new RegExp(`${ext}$`), '.avif');
       const outputFilePath = filePath.replace(new RegExp(`${ext}$`), '.avif');
 
       console.log(`[INFO] Processing: ${file}`);
@@ -78,10 +131,17 @@ async function runImageOptimization(): Promise<void> {
         .avif({ quality: CONFIG.AVIF_QUALITY, effort: CONFIG.AVIF_EFFORT })
         .toFile(outputFilePath);
 
-      // Delete the original legacy file from disk asynchronously
-      await unlink(filePath);
+      // 1. Update document references before deleting original
+      await updateReferences(baseName, outputFileName);
 
-      // Update the Git index
+      // 2. Delete the original legacy file from disk
+      try {
+        await safeUnlink(filePath);
+      } catch (err) {
+        console.warn(`${COLORS.red}[WARN] Could not delete original file: ${file}${COLORS.reset}`);
+      }
+
+      // 3. Update the Git index
       await execa('git', ['rm', '--cached', file]);
       await execa('git', ['add', outputFilePath]);
     }

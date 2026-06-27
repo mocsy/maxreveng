@@ -12,3 +12,6 @@ Type-c to Type-c
 
 ## STL/STEP/SCAD
 https://github.com/bigtreetech/K-Hub/tree/master/3D%20Printing%20Files
+
+##
+![BBT K Hub](/img/1060000873-KHUB_1000_4.webp)
