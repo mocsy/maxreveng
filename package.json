@@ -5,7 +5,11 @@
   "main": "index.ts",
   "type": "module",
   "scripts": {
+    "start": "tsx src/index.ts",
     "test": "pnpm lint:no-emoji",
+    "test:parser": "tsx src/tests/parser.test.ts",
+    "test:validator": "tsx src/tests/validator.test.ts",
+    "test:all": "pnpm run test:parser && pnpm run test:validator",
     "prepare": "husky",
     "compress": "tsx scripts/compress-images.ts",
     "lint:no-emoji": "tsx scripts/check-no-emojis.ts",
@@ -21,12 +25,15 @@
       "onFail": "download"
     }
   },
-  "devDependencies": {
+  "dependencies": {
     "@types/node": "^26.0.1",
     "execa": "^9.6.1",
     "husky": "^9.1.7",
     "sharp": "^0.35.2",
     "tsx": "^4.19.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "chalk": "^5.6.2",
+    "commander": "^15.0.0",
+    "ora": "^9.4.1"
   }
 }

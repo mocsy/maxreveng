@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "name": "m8p",
+    "version": "1.0.0",
+    "author": "Test"
+  },
+  "constraints": {},
+  "sections": {
+    "printer": {
+      "required": true,
+      "keys": {
+        "kinematics": {
+          "type": "string",
+          "enum": ["corexy", "cartesian"]
+        }
+      }
+    }
+  }
+}
